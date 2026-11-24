@@ -1,27 +1,46 @@
-name: Build Godot No-SSE4.2
-on: [workflow_dispatch]
+name: Build Godot Windows x64 (SSE2 / No-SSE4.2)
+
+on:
+  workflow_dispatch: # Позволяет запускать сборку вручную кнопкой на вкладке Actions
 
 jobs:
-  build-windows:
+  build-windows-sse2:
     runs-on: windows-latest
+    timeout-minutes: 90
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Godot Source
+        uses: actions/checkout@v4
         with:
-          fetch-depth: 1 # Скачивает только последний коммит (экономия места)
+          fetch-depth: 1
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.12'
 
-      - name: Install SCons
-        run: pip install scons
+      - name: Install SCons and Zstandard
+        run: |
+          python -m pip install --upgrade pip
+          pip install scons zstandard
 
-      - name: Build Editor (x86_64-v1 / SSE2)
-        run: scons platform=windows target=editor arch=x86_64 optimize=speed ccflags="-march=x86-64"
+      - name: Install Windows Dependencies (D3D12, AccessKit, ANGLE)
+        run: |
+          python misc/scripts/install_d3d12_sdk_windows.py
+          python misc/scripts/install_accesskit.py
+          python misc/scripts/install_angle.py
 
-      - name: Upload Artifact
+      - name: Build Godot Editor (x86_64 SSE2)
+        run: scons platform=windows target=editor arch=x86_64 optimize=speed lto=none -j4
+
+      - name: Build Windows Export Template Release (x86_64 SSE2)
+        run: scons platform=windows target=template_release arch=x86_64 optimize=speed lto=none -j4
+
+      - name: Upload Compiled Binaries
         uses: actions/upload-artifact@v4
         with:
-          name: godot-windows-sse2
-          path: bin/godot.windows.editor.x86_64.exe
+          name: Godot-Windows-x64-SSE2
+          path: |
+            bin/godot.windows.editor.x86_64.exe
+            bin/godot.windows.template_release.x86_64.exe
+          compression-level: 9
